@@ -1,0 +1,2412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NHM Fund Monitor - Gujarat Health Infrastructure</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Leaflet Maps -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- jsPDF for Reports -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
+        
+        * {
+            font-family: 'Inter', sans-serif;
+        }
+
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        /* Glassmorphism */
+        .glass {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.18);
+        }
+
+        .glass-dark {
+            background: rgba(30, 41, 59, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        /* Animations */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes slideIn {
+            from { transform: translateX(-100%); }
+            to { transform: translateX(0); }
+        }
+
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 0 20px rgba(99, 102, 241, 0.5); }
+            50% { box-shadow: 0 0 40px rgba(99, 102, 241, 0.8); }
+        }
+
+        .animate-fade-in {
+            animation: fadeIn 0.5s ease-out;
+        }
+
+        .animate-slide-in {
+            animation: slideIn 0.3s ease-out;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #94a3b8;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #64748b;
+        }
+
+        /* Map Container */
+        #map-container {
+            height: 500px;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        /* Risk Score Gradient */
+        .risk-low {
+            background: linear-gradient(135deg, #10b981, #059669);
+        }
+
+        .risk-medium {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+        }
+
+        .risk-high {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+        }
+
+        /* Sidebar */
+        .sidebar-link {
+            transition: all 0.2s;
+            position: relative;
+        }
+
+        .sidebar-link:hover,
+        .sidebar-link.active {
+            background: rgba(99, 102, 241, 0.1);
+            border-left: 4px solid #6366f1;
+            padding-left: 1.25rem;
+        }
+
+        /* Loading Spinner */
+        .spinner {
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top: 3px solid #6366f1;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Notification Badge */
+        .notification-badge {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        /* Progress Ring */
+        .progress-ring-circle {
+            transition: stroke-dashoffset 0.5s ease-out;
+            transform: rotate(-90deg);
+            transform-origin: 50% 50%;
+        }
+
+        /* Mobile Responsive */
+        @media (max-width: 768px) {
+            #map-container {
+                height: 300px;
+            }
+        }
+
+        /* Custom Toggle Switch */
+        .toggle-switch {
+            position: relative;
+            width: 60px;
+            height: 30px;
+            background: #cbd5e1;
+            border-radius: 30px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .toggle-switch.active {
+            background: #6366f1;
+        }
+
+        .toggle-switch::after {
+            content: '';
+            position: absolute;
+            top: 3px;
+            left: 3px;
+            width: 24px;
+            height: 24px;
+            background: white;
+            border-radius: 50%;
+            transition: transform 0.3s;
+        }
+
+        .toggle-switch.active::after {
+            transform: translateX(30px);
+        }
+    </style>
+</head>
+<body class="h-screen overflow-hidden">
+
+    <!-- Auth Screen -->
+    <div id="auth-screen" class="h-full flex items-center justify-center p-4">
+        <div class="glass rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-fade-in">
+            <!-- Header -->
+            <div class="bg-gradient-to-r from-indigo-600 to-purple-600 p-6 text-white">
+                <div class="flex items-center gap-3 mb-2">
+                    <div class="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-sm">
+                        <i class="fas fa-heartbeat text-2xl"></i>
+                    </div>
+                    <div>
+                        <h1 class="text-2xl font-bold">NHM Fund Monitor</h1>
+                        <p class="text-sm text-indigo-100">Gujarat Health Infrastructure</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Auth Forms Container -->
+            <div class="p-8">
+                <!-- Login Form -->
+                <div id="login-form">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-6">Sign In</h2>
+                    <form onsubmit="handleLogin(event)" class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
+                            <input type="email" id="login-email" required 
+                                class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
+                                placeholder="admin@nhm.gov.in">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Password</label>
+                            <input type="password" id="login-password" required 
+                                class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
+                                placeholder="••••••••">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Login As</label>
+                            <select id="login-role" required 
+                                class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition">
+                                <option value="admin">Policy Maker / Admin</option>
+                                <option value="auditor">Field Auditor</option>
+                            </select>
+                        </div>
+                        <button type="submit" 
+                            class="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-3 rounded-lg font-semibold hover:shadow-lg transform hover:scale-[1.02] transition">
+                            Sign In
+                        </button>
+                    </form>
+                    <div class="mt-6 text-center">
+                        <p class="text-sm text-gray-600">
+                            Don't have an account? 
+                            <button onclick="toggleAuthForm()" class="text-indigo-600 font-semibold hover:underline">Sign Up</button>
+                        </p>
+                    </div>
+                    <div class="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                        <p class="text-xs text-blue-800 font-medium">Demo Credentials:</p>
+                        <p class="text-xs text-blue-600">Admin: admin@nhm.gov.in / admin123</p>
+                        <p class="text-xs text-blue-600">Auditor: auditor@nhm.gov.in / audit123</p>
+                    </div>
+                </div>
+
+                <!-- Signup Form -->
+                <div id="signup-form" class="hidden">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-6">Create Account</h2>
+                    <form onsubmit="handleSignup(event)" class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Full Name</label>
+                            <input type="text" id="signup-name" required 
+                                class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
+                                placeholder="Dr. Rajesh Sharma">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Email Address</label>
+                            <input type="email" id="signup-email" required 
+                                class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
+                                placeholder="rajesh.sharma@nhm.gov.in">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Password</label>
+                            <input type="password" id="signup-password" required minlength="6"
+                                class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition"
+                                placeholder="••••••••">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Role</label>
+                            <select id="signup-role" required 
+                                class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition">
+                                <option value="admin">Policy Maker / Admin</option>
+                                <option value="auditor">Field Auditor</option>
+                            </select>
+                        </div>
+                        <button type="submit" 
+                            class="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-3 rounded-lg font-semibold hover:shadow-lg transform hover:scale-[1.02] transition">
+                            Create Account
+                        </button>
+                    </form>
+                    <div class="mt-6 text-center">
+                        <p class="text-sm text-gray-600">
+                            Already have an account? 
+                            <button onclick="toggleAuthForm()" class="text-indigo-600 font-semibold hover:underline">Sign In</button>
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Application (Hidden Initially) -->
+    <div id="main-app" class="hidden h-full flex overflow-hidden bg-gray-50">
+        
+        <!-- Sidebar (Desktop) -->
+        <aside id="sidebar" class="w-64 glass-dark text-white flex-shrink-0 hidden lg:flex flex-col">
+            <div class="p-6 border-b border-white/10">
+                <div class="flex items-center gap-3">
+                    <div class="w-12 h-12 bg-indigo-500 rounded-xl flex items-center justify-center shadow-lg">
+                        <i class="fas fa-heartbeat text-2xl"></i>
+                    </div>
+                    <div>
+                        <h1 class="font-bold text-lg">NHM Monitor</h1>
+                        <p class="text-xs text-gray-400" id="sidebar-role">Admin Dashboard</p>
+                    </div>
+                </div>
+            </div>
+
+            <nav class="flex-1 overflow-y-auto py-6 space-y-1">
+                <a href="#" onclick="navigate('dashboard')" class="sidebar-link active flex items-center gap-3 px-6 py-3 text-sm font-medium">
+                    <i class="fas fa-chart-line w-5"></i> Dashboard
+                </a>
+                <a href="#" onclick="navigate('projects')" class="sidebar-link flex items-center gap-3 px-6 py-3 text-sm font-medium">
+                    <i class="fas fa-list-check w-5"></i> All Projects
+                </a>
+                <a href="#" onclick="navigate('add-project')" id="add-project-link" class="sidebar-link flex items-center gap-3 px-6 py-3 text-sm font-medium">
+                    <i class="fas fa-plus-circle w-5"></i> Add New Project
+                    <span class="ml-auto bg-indigo-600 text-xs py-0.5 px-2 rounded-full">NEW</span>
+                </a>
+                <a href="#" onclick="navigate('anomalies')" class="sidebar-link flex items-center gap-3 px-6 py-3 text-sm font-medium">
+                    <i class="fas fa-exclamation-triangle w-5"></i> Anomalies & Alerts
+                </a>
+                <a href="#" onclick="navigate('auditor')" id="auditor-link" class="sidebar-link flex items-center gap-3 px-6 py-3 text-sm font-medium">
+                    <i class="fas fa-mobile-screen w-5"></i> Field Auditor
+                </a>
+                <a href="#" onclick="navigate('analytics')" class="sidebar-link flex items-center gap-3 px-6 py-3 text-sm font-medium">
+                    <i class="fas fa-brain w-5"></i> AI Analytics
+                    <span class="ml-auto bg-purple-600 text-xs py-0.5 px-2 rounded-full">AI</span>
+                </a>
+                <a href="#" onclick="navigate('forecasting')" class="sidebar-link flex items-center gap-3 px-6 py-3 text-sm font-medium">
+                    <i class="fas fa-chart-area w-5"></i> Budget Forecasting
+                    <span class="ml-auto bg-green-600 text-xs py-0.5 px-2 rounded-full">NEW</span>
+                </a>
+                <a href="#" onclick="navigate('reports')" class="sidebar-link flex items-center gap-3 px-6 py-3 text-sm font-medium">
+                    <i class="fas fa-file-pdf w-5"></i> Reports & Export
+                </a>
+                <a href="#" onclick="navigate('settings')" class="sidebar-link flex items-center gap-3 px-6 py-3 text-sm font-medium">
+                    <i class="fas fa-cog w-5"></i> Settings
+                </a>
+            </nav>
+
+            <div class="p-4 border-t border-white/10">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-full bg-indigo-600 flex items-center justify-center font-bold text-sm" id="user-avatar">
+                            A
+                        </div>
+                        <div>
+                            <p class="text-sm font-medium" id="user-name">Admin</p>
+                            <p class="text-xs text-gray-400" id="user-email">admin@nhm.gov.in</p>
+                        </div>
+                    </div>
+                    <button onclick="handleLogout()" class="text-gray-400 hover:text-white transition">
+                        <i class="fas fa-sign-out-alt"></i>
+                    </button>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="flex-1 flex flex-col overflow-hidden">
+            <!-- Header -->
+            <header class="glass h-16 flex items-center justify-between px-4 lg:px-8 shadow-sm border-b border-gray-200 flex-shrink-0">
+                <div class="flex items-center gap-4">
+                    <button onclick="toggleMobileSidebar()" class="lg:hidden text-gray-600">
+                        <i class="fas fa-bars text-xl"></i>
+                    </button>
+                    <h2 class="text-lg lg:text-xl font-bold text-gray-800" id="page-title">Dashboard</h2>
+                </div>
+                <div class="flex items-center gap-4">
+                    <div class="hidden md:flex items-center gap-2 px-3 py-1.5 bg-green-50 rounded-full border border-green-200">
+                        <span class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                        <span class="text-xs font-semibold text-green-700">Live System</span>
+                    </div>
+                    <button onclick="navigate('notifications')" class="relative text-gray-600 hover:text-gray-800">
+                        <i class="far fa-bell text-xl"></i>
+                        <span id="notification-count" class="absolute -top-1 -right-1 w-4 h-4 bg-red-500 rounded-full text-white text-xs flex items-center justify-center notification-badge">3</span>
+                    </button>
+                    <button onclick="handleLogout()" class="lg:hidden text-gray-600 hover:text-gray-800">
+                        <i class="fas fa-sign-out-alt text-xl"></i>
+                    </button>
+                </div>
+            </header>
+
+            <!-- Content Container -->
+            <div id="content-area" class="flex-1 overflow-y-auto p-4 lg:p-8"></div>
+        </main>
+
+        <!-- Mobile Bottom Nav -->
+        <div class="lg:hidden glass border-t border-gray-200 flex justify-around p-3 pb-safe">
+            <button onclick="navigate('dashboard')" class="flex flex-col items-center text-gray-500 hover:text-indigo-600 text-xs gap-1">
+                <i class="fas fa-chart-pie text-lg"></i>
+                <span>Dashboard</span>
+            </button>
+            <button onclick="navigate('projects')" class="flex flex-col items-center text-gray-500 hover:text-indigo-600 text-xs gap-1">
+                <i class="fas fa-list text-lg"></i>
+                <span>Projects</span>
+            </button>
+            <button onclick="navigate('auditor')" id="mobile-auditor-btn" class="flex flex-col items-center text-gray-500 hover:text-indigo-600 text-xs gap-1">
+                <i class="fas fa-camera text-lg"></i>
+                <span>Audit</span>
+            </button>
+            <button onclick="navigate('analytics')" class="flex flex-col items-center text-gray-500 hover:text-indigo-600 text-xs gap-1">
+                <i class="fas fa-brain text-lg"></i>
+                <span>AI</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Mobile Sidebar Overlay -->
+    <div id="mobile-sidebar" class="fixed inset-0 bg-black/50 z-50 hidden lg:hidden" onclick="toggleMobileSidebar()">
+        <div onclick="event.stopPropagation()" class="glass-dark w-64 h-full animate-slide-in text-white">
+            <div class="p-6 border-b border-white/10 flex justify-between items-center">
+                <h2 class="font-bold text-xl">Menu</h2>
+                <button onclick="toggleMobileSidebar()">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+            <nav class="py-6 space-y-1">
+                <a href="#" onclick="navigate('dashboard'); toggleMobileSidebar()" class="flex items-center gap-3 px-6 py-3 text-sm font-medium hover:bg-white/10">
+                    <i class="fas fa-chart-line w-5"></i> Dashboard
+                </a>
+                <a href="#" onclick="navigate('projects'); toggleMobileSidebar()" class="flex items-center gap-3 px-6 py-3 text-sm font-medium hover:bg-white/10">
+                    <i class="fas fa-list-check w-5"></i> All Projects
+                </a>
+                <a href="#" onclick="navigate('anomalies'); toggleMobileSidebar()" class="flex items-center gap-3 px-6 py-3 text-sm font-medium hover:bg-white/10">
+                    <i class="fas fa-exclamation-triangle w-5"></i> Anomalies
+                </a>
+                <a href="#" onclick="navigate('auditor'); toggleMobileSidebar()" id="mobile-auditor-link" class="flex items-center gap-3 px-6 py-3 text-sm font-medium hover:bg-white/10">
+                    <i class="fas fa-mobile-screen w-5"></i> Field Auditor
+                </a>
+                <a href="#" onclick="navigate('analytics'); toggleMobileSidebar()" class="flex items-center gap-3 px-6 py-3 text-sm font-medium hover:bg-white/10">
+                    <i class="fas fa-brain w-5"></i> AI Analytics
+                </a>
+                <a href="#" onclick="navigate('forecasting'); toggleMobileSidebar()" class="flex items-center gap-3 px-6 py-3 text-sm font-medium hover:bg-white/10">
+                    <i class="fas fa-chart-area w-5"></i> Forecasting
+                </a>
+                <a href="#" onclick="navigate('reports'); toggleMobileSidebar()" class="flex items-center gap-3 px-6 py-3 text-sm font-medium hover:bg-white/10">
+                    <i class="fas fa-file-pdf w-5"></i> Reports
+                </a>
+            </nav>
+        </div>
+    </div>
+
+    <!-- Project Detail Modal -->
+    <div id="project-modal" class="fixed inset-0 bg-black/50 z-50 hidden flex items-center justify-center p-4">
+        <div class="glass rounded-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto animate-fade-in">
+            <div class="bg-gradient-to-r from-indigo-600 to-purple-600 p-6 text-white flex justify-between items-center sticky top-0 z-10">
+                <div>
+                    <h3 class="text-2xl font-bold" id="modal-project-name">Project Details</h3>
+                    <p class="text-sm text-indigo-100" id="modal-project-id">ID: #000</p>
+                </div>
+                <button onclick="closeModal()" class="text-white hover:text-gray-200">
+                    <i class="fas fa-times text-2xl"></i>
+                </button>
+            </div>
+            <div id="modal-content" class="p-6"></div>
+        </div>
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toast-container" class="fixed top-20 right-5 z-50 space-y-3"></div>
+
+    <!-- JavaScript -->
+    <script>
+        // ==================== DATA STORE ====================
+        const DATA = {
+            users: JSON.parse(localStorage.getItem('nhm_users')) || [
+                { id: 1, name: 'Admin User', email: 'admin@nhm.gov.in', password: 'admin123', role: 'admin' },
+                { id: 2, name: 'Field Auditor', email: 'auditor@nhm.gov.in', password: 'audit123', role: 'auditor' }
+            ],
+            currentUser: JSON.parse(localStorage.getItem('nhm_current_user')) || null,
+            projects: JSON.parse(localStorage.getItem('nhm_projects')) || [
+                { 
+                    id: 101, 
+                    name: "PHC Dholka Expansion", 
+                    district: "Ahmedabad", 
+                    lat: 22.7177, 
+                    lng: 72.4587, 
+                    budget: 25000000, 
+                    spent: 20000000, 
+                    progress: 40, 
+                    targetDate: "2024-03-31", 
+                    status: "Critical", 
+                    contractor: "Gujarat Construction Ltd.",
+                    category: "Infrastructure",
+                    verifications: [],
+                    expenditures: [],
+                    lastUpdate: "2024-01-15",
+                    startDate: "2023-06-01"
+                },
+                { 
+                    id: 102, 
+                    name: "Civil Hospital Ward-B", 
+                    district: "Surat", 
+                    lat: 21.1702, 
+                    lng: 72.8311, 
+                    budget: 50000000, 
+                    spent: 45000000, 
+                    progress: 88, 
+                    targetDate: "2024-02-28", 
+                    status: "On Track", 
+                    contractor: "Surat Builders Pvt. Ltd.",
+                    category: "Expansion",
+                    verifications: [],
+                    expenditures: [],
+                    lastUpdate: "2024-01-20",
+                    startDate: "2023-04-15"
+                },
+                { 
+                    id: 103, 
+                    name: "Rural Health Center", 
+                    district: "Vadodara", 
+                    lat: 22.3072, 
+                    lng: 73.1812, 
+                    budget: 15000000, 
+                    spent: 2000000, 
+                    progress: 10, 
+                    targetDate: "2024-06-30", 
+                    status: "Delayed", 
+                    contractor: "Vadodara Infrastructure Co.",
+                    category: "New Construction",
+                    verifications: [],
+                    expenditures: [],
+                    lastUpdate: "2023-12-30",
+                    startDate: "2023-08-01"
+                },
+                { 
+                    id: 104, 
+                    name: "Sub-Center Kotda", 
+                    district: "Rajkot", 
+                    lat: 22.3039, 
+                    lng: 70.8022, 
+                    budget: 8000000, 
+                    spent: 7500000, 
+                    progress: 95, 
+                    targetDate: "2024-01-31", 
+                    status: "On Track", 
+                    contractor: "Rajkot Engineering Works",
+                    category: "Renovation",
+                    verifications: [],
+                    expenditures: [],
+                    lastUpdate: "2024-01-18",
+                    startDate: "2023-07-01"
+                },
+                { 
+                    id: 105, 
+                    name: "Oxygen Plant GNR", 
+                    district: "Gandhinagar", 
+                    lat: 23.2156, 
+                    lng: 72.6369, 
+                    budget: 12000000, 
+                    spent: 9000000, 
+                    progress: 50, 
+                    targetDate: "2024-04-30", 
+                    status: "Critical", 
+                    contractor: "Medical Equipment Gujarat",
+                    category: "Equipment",
+                    verifications: [],
+                    expenditures: [],
+                    lastUpdate: "2024-01-10",
+                    startDate: "2023-09-01"
+                },
+                { 
+                    id: 106, 
+                    name: "Trauma Center Junagadh", 
+                    district: "Junagadh", 
+                    lat: 21.5222, 
+                    lng: 70.4579, 
+                    budget: 35000000, 
+                    spent: 28000000, 
+                    progress: 75, 
+                    targetDate: "2024-05-31", 
+                    status: "On Track", 
+                    contractor: "Junagadh Developers",
+                    category: "Specialized Facility",
+                    verifications: [],
+                    expenditures: [],
+                    lastUpdate: "2024-01-22",
+                    startDate: "2023-05-15"
+                },
+            ],
+            notifications: JSON.parse(localStorage.getItem('nhm_notifications')) || []
+        };
+
+        // Save data to localStorage
+        function saveData() {
+            localStorage.setItem('nhm_users', JSON.stringify(DATA.users));
+            localStorage.setItem('nhm_current_user', JSON.stringify(DATA.currentUser));
+            localStorage.setItem('nhm_projects', JSON.stringify(DATA.projects));
+            localStorage.setItem('nhm_notifications', JSON.stringify(DATA.notifications));
+        }
+
+        // ==================== AUTH FUNCTIONS ====================
+        function toggleAuthForm() {
+            const loginForm = document.getElementById('login-form');
+            const signupForm = document.getElementById('signup-form');
+            loginForm.classList.toggle('hidden');
+            signupForm.classList.toggle('hidden');
+        }
+
+        function handleLogin(e) {
+            e.preventDefault();
+            const email = document.getElementById('login-email').value;
+            const password = document.getElementById('login-password').value;
+            const role = document.getElementById('login-role').value;
+
+            const user = DATA.users.find(u => u.email === email && u.password === password && u.role === role);
+            
+            if (user) {
+                DATA.currentUser = user;
+                saveData();
+                showToast('Login successful!', 'success');
+                initializeApp();
+            } else {
+                showToast('Invalid credentials or role', 'error');
+            }
+        }
+
+        function handleSignup(e) {
+            e.preventDefault();
+            const name = document.getElementById('signup-name').value;
+            const email = document.getElementById('signup-email').value;
+            const password = document.getElementById('signup-password').value;
+            const role = document.getElementById('signup-role').value;
+
+            if (DATA.users.find(u => u.email === email)) {
+                showToast('Email already exists', 'error');
+                return;
+            }
+
+            const newUser = {
+                id: Date.now(),
+                name,
+                email,
+                password,
+                role
+            };
+
+            DATA.users.push(newUser);
+            DATA.currentUser = newUser;
+            saveData();
+            showToast('Account created successfully!', 'success');
+            initializeApp();
+        }
+
+        function handleLogout() {
+            DATA.currentUser = null;
+            saveData();
+            location.reload();
+        }
+
+        function initializeApp() {
+            document.getElementById('auth-screen').classList.add('hidden');
+            document.getElementById('main-app').classList.remove('hidden');
+            
+            // Update user info in sidebar
+            const user = DATA.currentUser;
+            document.getElementById('user-name').textContent = user.name;
+            document.getElementById('user-email').textContent = user.email;
+            document.getElementById('user-avatar').textContent = user.name.charAt(0).toUpperCase();
+            document.getElementById('sidebar-role').textContent = user.role === 'admin' ? 'Admin Dashboard' : 'Auditor Dashboard';
+
+            // Show/hide auditor-only features
+            if (user.role !== 'auditor') {
+                document.getElementById('auditor-link').classList.add('hidden');
+                document.getElementById('mobile-auditor-link').classList.add('hidden');
+                document.getElementById('mobile-auditor-btn').classList.add('hidden');
+            }
+
+            // Update notification count
+            updateNotificationCount();
+
+            navigate('dashboard');
+        }
+
+        // ==================== NAVIGATION ====================
+        let currentView = 'dashboard';
+        let mapInstance = null;
+
+        function navigate(view) {
+            currentView = view;
+            const content = document.getElementById('content-area');
+            
+            // Update active sidebar link
+            document.querySelectorAll('.sidebar-link').forEach(link => {
+                link.classList.remove('active');
+            });
+            event?.target?.closest('.sidebar-link')?.classList.add('active');
+
+            // Update page title
+            const titles = {
+                'dashboard': 'Dashboard Overview',
+                'projects': 'Project Registry',
+                'add-project': 'Add New Project',
+                'anomalies': 'Anomalies & Alerts',
+                'auditor': 'Field Auditor',
+                'analytics': 'AI Analytics Engine',
+                'forecasting': 'Budget Forecasting',
+                'reports': 'Reports & Export',
+                'notifications': 'Notifications',
+                'settings': 'Settings'
+            };
+            document.getElementById('page-title').textContent = titles[view] || 'Dashboard';
+
+            // Render view
+            content.innerHTML = '<div class="flex justify-center items-center h-64"><div class="spinner"></div></div>';
+            
+            setTimeout(() => {
+                if (view === 'dashboard') renderDashboard();
+                else if (view === 'projects') renderProjects();
+                else if (view === 'add-project') renderAddProject();
+                else if (view === 'anomalies') renderAnomalies();
+                else if (view === 'auditor') renderAuditor();
+                else if (view === 'analytics') renderAnalytics();
+                else if (view === 'forecasting') renderForecasting();
+                else if (view === 'reports') renderReports();
+                else if (view === 'notifications') renderNotifications();
+                else if (view === 'settings') renderSettings();
+            }, 300);
+        }
+
+        // ==================== UTILITY FUNCTIONS ====================
+        function calculateRiskScore(project) {
+            const util = (project.spent / project.budget) * 100;
+            const progressDisparity = Math.abs(util - project.progress);
+            const daysSinceUpdate = Math.floor((new Date() - new Date(project.lastUpdate)) / (1000 * 60 * 60 * 24));
+            const targetDate = new Date(project.targetDate);
+            const daysToTarget = Math.floor((targetDate - new Date()) / (1000 * 60 * 60 * 24));
+            
+            let score = 0;
+            
+            // Financial anomaly (40% weight)
+            if (progressDisparity > 30) score += 40;
+            else if (progressDisparity > 20) score += 30;
+            else if (progressDisparity > 10) score += 15;
+            
+            // Time since last update (30% weight)
+            if (daysSinceUpdate > 30) score += 30;
+            else if (daysSinceUpdate > 15) score += 20;
+            else if (daysSinceUpdate > 7) score += 10;
+            
+            // Days to target (30% weight)
+            if (daysToTarget < 30 && project.progress < 80) score += 30;
+            else if (daysToTarget < 60 && project.progress < 60) score += 20;
+            else if (daysToTarget < 90 && project.progress < 40) score += 10;
+            
+            return Math.min(score, 100);
+        }
+
+        function getRiskLevel(score) {
+            if (score >= 70) return { level: 'High', class: 'risk-high', color: 'red' };
+            if (score >= 40) return { level: 'Medium', class: 'risk-medium', color: 'yellow' };
+            return { level: 'Low', class: 'risk-low', color: 'green' };
+        }
+
+        function formatCurrency(amount) {
+            if (amount >= 10000000) return '₹' + (amount / 10000000).toFixed(2) + ' Cr';
+            if (amount >= 100000) return '₹' + (amount / 100000).toFixed(2) + ' L';
+            return '₹' + amount.toLocaleString('en-IN');
+        }
+
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            const colors = {
+                success: 'bg-green-500',
+                error: 'bg-red-500',
+                info: 'bg-blue-500',
+                warning: 'bg-yellow-500'
+            };
+            toast.className = `${colors[type]} text-white px-6 py-3 rounded-lg shadow-lg flex items-center gap-3 animate-fade-in`;
+            toast.innerHTML = `
+                <i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : type === 'warning' ? 'exclamation-triangle' : 'info-circle'}"></i>
+                <span>${message}</span>
+            `;
+            container.appendChild(toast);
+            setTimeout(() => toast.remove(), 3000);
+        }
+
+        function toggleMobileSidebar() {
+            document.getElementById('mobile-sidebar').classList.toggle('hidden');
+        }
+
+        function closeModal() {
+            document.getElementById('project-modal').classList.add('hidden');
+        }
+
+        function addNotification(title, message, type = 'info') {
+            const notification = {
+                id: Date.now(),
+                title,
+                message,
+                type,
+                timestamp: new Date().toISOString(),
+                read: false
+            };
+            DATA.notifications.unshift(notification);
+            saveData();
+            updateNotificationCount();
+        }
+
+        function updateNotificationCount() {
+            const unreadCount = DATA.notifications.filter(n => !n.read).length;
+            const badge = document.getElementById('notification-count');
+            if (badge) {
+                badge.textContent = unreadCount;
+                badge.style.display = unreadCount > 0 ? 'flex' : 'none';
+            }
+        }
+
+        function predictCompletionDate(project) {
+            const risk = calculateRiskScore(project);
+            const targetDate = new Date(project.targetDate);
+            
+            if (risk >= 70) {
+                // High risk: add 60-90 days delay
+                const delayDays = 60 + Math.floor(Math.random() * 30);
+                return new Date(targetDate.getTime() + delayDays * 24 * 60 * 60 * 1000);
+            } else if (risk >= 40) {
+                // Medium risk: add 15-30 days delay
+                const delayDays = 15 + Math.floor(Math.random() * 15);
+                return new Date(targetDate.getTime() + delayDays * 24 * 60 * 60 * 1000);
+            }
+            
+            return targetDate;
+        }
+
+        function openProjectModal(projectId) {
+            const project = DATA.projects.find(p => p.id === projectId);
+            if (!project) return;
+
+            const modal = document.getElementById('project-modal');
+            document.getElementById('modal-project-name').textContent = project.name;
+            document.getElementById('modal-project-id').textContent = `ID: #${project.id} | ${project.category}`;
+
+            const util = (project.spent / project.budget) * 100;
+            const risk = calculateRiskScore(project);
+            const riskInfo = getRiskLevel(risk);
+            const predictedDate = predictCompletionDate(project);
+
+            const content = document.getElementById('modal-content');
+            content.innerHTML = `
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                    <div class="glass rounded-xl p-6">
+                        <h4 class="font-bold text-gray-800 mb-4">Project Overview</h4>
+                        <div class="space-y-3 text-sm">
+                            <div class="flex justify-between">
+                                <span class="text-gray-600">District:</span>
+                                <span class="font-semibold">${project.district}</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-600">Contractor:</span>
+                                <span class="font-semibold">${project.contractor}</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-600">Budget:</span>
+                                <span class="font-semibold">${formatCurrency(project.budget)}</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-600">Spent:</span>
+                                <span class="font-semibold">${formatCurrency(project.spent)}</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-600">Remaining:</span>
+                                <span class="font-semibold text-green-600">${formatCurrency(project.budget - project.spent)}</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-600">Start Date:</span>
+                                <span class="font-semibold">${new Date(project.startDate).toLocaleDateString()}</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-600">Target Date:</span>
+                                <span class="font-semibold">${new Date(project.targetDate).toLocaleDateString()}</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-600">AI Predicted:</span>
+                                <span class="font-semibold ${risk >= 70 ? 'text-red-600' : risk >= 40 ? 'text-yellow-600' : 'text-green-600'}">
+                                    ${predictedDate.toLocaleDateString()}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="glass rounded-xl p-6">
+                        <h4 class="font-bold text-gray-800 mb-4">Risk Assessment</h4>
+                        <div class="flex items-center justify-center mb-4">
+                            <div class="relative w-32 h-32">
+                                <svg class="w-full h-full transform -rotate-90">
+                                    <circle cx="64" cy="64" r="56" stroke="#e5e7eb" stroke-width="8" fill="none"/>
+                                    <circle cx="64" cy="64" r="56" stroke="${riskInfo.color === 'red' ? '#ef4444' : riskInfo.color === 'yellow' ? '#f59e0b' : '#10b981'}" 
+                                        stroke-width="8" fill="none" stroke-dasharray="351.86" stroke-dashoffset="${351.86 - (351.86 * risk / 100)}" 
+                                        class="transition-all duration-1000"/>
+                                </svg>
+                                <div class="absolute inset-0 flex items-center justify-center flex-col">
+                                    <span class="text-3xl font-bold text-gray-800">${risk}</span>
+                                    <span class="text-xs text-gray-500">Risk Score</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="text-center mb-4">
+                            <span class="inline-block px-4 py-2 rounded-full ${riskInfo.class} text-white font-semibold">
+                                ${riskInfo.level} Risk
+                            </span>
+                        </div>
+                        <div class="space-y-2 text-xs">
+                            <div class="flex justify-between">
+                                <span class="text-gray-600">Financial Disparity:</span>
+                                <span class="font-semibold">${Math.abs(util - project.progress).toFixed(1)}%</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-600">Days Since Update:</span>
+                                <span class="font-semibold">${Math.floor((new Date() - new Date(project.lastUpdate)) / (1000 * 60 * 60 * 24))} days</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="glass rounded-xl p-6 mb-6">
+                    <h4 class="font-bold text-gray-800 mb-4">Progress Timeline</h4>
+                    <div class="h-64">
+                        <canvas id="modal-timeline-chart"></canvas>
+                    </div>
+                </div>
+
+                <div class="glass rounded-xl p-6">
+                    <h4 class="font-bold text-gray-800 mb-4 flex justify-between items-center">
+                        <span>Verification Log</span>
+                        <span class="text-xs text-gray-500">${project.verifications.length} records</span>
+                    </h4>
+                    ${project.verifications.length > 0 ? `
+                        <div class="space-y-4">
+                            ${project.verifications.slice(0, 3).map(v => `
+                                <div class="flex gap-4 p-4 bg-gray-50 rounded-lg">
+                                    <div class="w-24 h-24 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-500 flex items-center justify-center text-white">
+                                        <i class="fas fa-image text-3xl"></i>
+                                    </div>
+                                    <div class="flex-1">
+                                        <div class="flex justify-between items-start mb-2">
+                                            <div>
+                                                <p class="font-semibold text-gray-800">${v.milestone}% Completion</p>
+                                                <p class="text-xs text-gray-500">${new Date(v.timestamp).toLocaleString()}</p>
+                                            </div>
+                                            ${v.aiMatch ? 
+                                                '<span class="bg-green-100 text-green-700 text-xs px-3 py-1 rounded-full font-semibold">AI Verified ✓</span>' :
+                                                '<span class="bg-red-100 text-red-700 text-xs px-3 py-1 rounded-full font-semibold">MISMATCH DETECTED</span>'
+                                            }
+                                        </div>
+                                        <p class="text-sm text-gray-600">Auditor: ${v.auditorReported} | AI: ${v.aiClassified}</p>
+                                        <p class="text-xs text-gray-400 mt-1">Confidence: ${v.confidence}%</p>
+                                        <p class="text-xs text-gray-400">Location: ${v.lat.toFixed(4)}, ${v.lng.toFixed(4)}</p>
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : `
+                        <div class="text-center py-8 text-gray-400">
+                            <i class="fas fa-inbox text-4xl mb-2"></i>
+                            <p>No verification records yet</p>
+                        </div>
+                    `}
+                </div>
+            `;
+
+            modal.classList.remove('hidden');
+
+            // Render timeline chart
+            setTimeout(() => {
+                const ctx = document.getElementById('modal-timeline-chart');
+                if (ctx) {
+                    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul'];
+                    const actualData = months.map((_, i) => Math.min(project.progress, (i + 1) * (project.progress / 7)));
+                    const targetData = months.map((_, i) => (i + 1) * (100 / 7));
+                    
+                    new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: months,
+                            datasets: [{
+                                label: 'Actual Progress',
+                                data: actualData,
+                                borderColor: '#6366f1',
+                                backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                                tension: 0.4,
+                                fill: true
+                            }, {
+                                label: 'Target Progress',
+                                data: targetData,
+                                borderColor: '#94a3b8',
+                                borderDash: [5, 5],
+                                tension: 0.4,
+                                fill: false
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { position: 'bottom' } },
+                            scales: { y: { beginAtZero: true, max: 100 } }
+                        }
+                    });
+                }
+            }, 100);
+        }
+
+        // ==================== DASHBOARD VIEW ====================
+        function renderDashboard() {
+            const totalBudget = DATA.projects.reduce((sum, p) => sum + p.budget, 0);
+            const totalSpent = DATA.projects.reduce((sum, p) => sum + p.spent, 0);
+            const utilRate = ((totalSpent / totalBudget) * 100).toFixed(1);
+            const unspent = totalBudget - totalSpent;
+            const criticalCount = DATA.projects.filter(p => calculateRiskScore(p) >= 70).length;
+            const avgProgress = (DATA.projects.reduce((sum, p) => sum + p.progress, 0) / DATA.projects.length).toFixed(1);
+
+            const content = document.getElementById('content-area');
+            content.innerHTML = `
+                <div class="animate-fade-in space-y-6">
+                    <!-- KPI Cards -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                        <div class="glass rounded-xl p-6 border-l-4 border-indigo-500">
+                            <p class="text-xs text-gray-500 font-semibold uppercase">Total Allocation</p>
+                            <h3 class="text-3xl font-bold text-gray-800 mt-2">${formatCurrency(totalBudget)}</h3>
+                            <p class="text-xs text-gray-400 mt-2">FY 2023-24</p>
+                        </div>
+                        <div class="glass rounded-xl p-6 border-l-4 border-green-500">
+                            <p class="text-xs text-gray-500 font-semibold uppercase">Utilization Rate</p>
+                            <h3 class="text-3xl font-bold text-green-600 mt-2">${utilRate}%</h3>
+                            <div class="w-full bg-gray-200 rounded-full h-2 mt-3">
+                                <div class="bg-green-500 h-2 rounded-full transition-all duration-1000" style="width: ${utilRate}%"></div>
+                            </div>
+                        </div>
+                        <div class="glass rounded-xl p-6 border-l-4 border-orange-500">
+                            <p class="text-xs text-gray-500 font-semibold uppercase">Unspent Funds</p>
+                            <h3 class="text-3xl font-bold text-orange-600 mt-2">${formatCurrency(unspent)}</h3>
+                            <p class="text-xs text-orange-500 mt-2">Requires attention</p>
+                        </div>
+                        <div class="glass rounded-xl p-6 border-l-4 border-red-500">
+                            <p class="text-xs text-gray-500 font-semibold uppercase">High Risk Projects</p>
+                            <h3 class="text-3xl font-bold text-red-600 mt-2">${criticalCount}</h3>
+                            <p class="text-xs text-red-500 mt-2">Critical anomalies</p>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <!-- Map -->
+                        <div class="lg:col-span-2 glass rounded-xl overflow-hidden">
+                            <div class="p-4 border-b border-gray-200">
+                                <h3 class="font-bold text-gray-800">Infrastructure Map - Gujarat</h3>
+                                <div class="flex gap-4 mt-2 text-xs">
+                                    <span class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-green-500"></span> Low Risk</span>
+                                    <span class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-yellow-500"></span> Medium Risk</span>
+                                    <span class="flex items-center gap-2"><span class="w-3 h-3 rounded-full bg-red-500"></span> High Risk</span>
+                                </div>
+                            </div>
+                            <div id="map-container"></div>
+                        </div>
+
+                        <!-- Priority Alerts -->
+                        <div class="glass rounded-xl flex flex-col">
+                            <div class="p-4 border-b border-gray-200">
+                                <h3 class="font-bold text-gray-800 flex items-center gap-2">
+                                    <i class="fas fa-exclamation-triangle text-red-500"></i> Priority Alerts
+                                </h3>
+                            </div>
+                            <div class="flex-1 overflow-y-auto p-4 space-y-3" id="priority-alerts">
+                                <!-- Populated by JS -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Charts -->
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <div class="glass rounded-xl p-6">
+                            <h3 class="font-bold text-gray-800 mb-4">District-wise Fund Distribution</h3>
+                            <div class="h-64">
+                                <canvas id="district-chart"></canvas>
+                            </div>
+                        </div>
+                        <div class="glass rounded-xl p-6">
+                            <h3 class="font-bold text-gray-800 mb-4">Monthly Expenditure Trend</h3>
+                            <div class="h-64">
+                                <canvas id="expenditure-chart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Quick Stats -->
+                    <div class="glass rounded-xl p-6">
+                        <h3 class="font-bold text-gray-800 mb-4">Quick Statistics</h3>
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
+                            <div class="text-center">
+                                <p class="text-3xl font-bold text-indigo-600">${DATA.projects.length}</p>
+                                <p class="text-sm text-gray-600 mt-1">Active Projects</p>
+                            </div>
+                            <div class="text-center">
+                                <p class="text-3xl font-bold text-green-600">${avgProgress}%</p>
+                                <p class="text-sm text-gray-600 mt-1">Avg. Progress</p>
+                            </div>
+                            <div class="text-center">
+                                <p class="text-3xl font-bold text-purple-600">${DATA.projects.filter(p => p.progress === 100).length}</p>
+                                <p class="text-sm text-gray-600 mt-1">Completed</p>
+                            </div>
+                            <div class="text-center">
+                                <p class="text-3xl font-bold text-orange-600">${DATA.projects.filter(p => calculateRiskScore(p) >= 40).length}</p>
+                                <p class="text-sm text-gray-600 mt-1">Flagged</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            setTimeout(() => {
+                initMap();
+                renderPriorityAlerts();
+                renderDistrictChart();
+                renderExpenditureChart();
+            }, 100);
+        }
+
+        function initMap() {
+            const container = document.getElementById('map-container');
+            if (!container) return;
+
+            if (mapInstance) {
+                mapInstance.remove();
+                mapInstance = null;
+            }
+
+            mapInstance = L.map('map-container').setView([22.2587, 71.1924], 7);
+            
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(mapInstance);
+
+            DATA.projects.forEach(p => {
+                const risk = calculateRiskScore(p);
+                const riskInfo = getRiskLevel(risk);
+                const color = riskInfo.color === 'red' ? '#ef4444' : riskInfo.color === 'yellow' ? '#f59e0b' : '#10b981';
+
+                const circle = L.circleMarker([p.lat, p.lng], {
+                    color: color,
+                    fillColor: color,
+                    fillOpacity: 0.7,
+                    radius: 10
+                }).addTo(mapInstance);
+
+                circle.bindPopup(`
+                    <div class="text-sm">
+                        <b>${p.name}</b><br>
+                        Progress: ${p.progress}%<br>
+                        Risk Score: ${risk}<br>
+                        <button onclick="openProjectModal(${p.id})" class="text-blue-600 hover:underline mt-1">View Details</button>
+                    </div>
+                `);
+            });
+        }
+
+        function renderPriorityAlerts() {
+            const container = document.getElementById('priority-alerts');
+            if (!container) return;
+
+            const highRisk = DATA.projects
+                .map(p => ({ ...p, risk: calculateRiskScore(p) }))
+                .filter(p => p.risk >= 70)
+                .sort((a, b) => b.risk - a.risk);
+
+            if (highRisk.length === 0) {
+                container.innerHTML = '<div class="text-center text-gray-400 py-8"><i class="fas fa-check-circle text-4xl mb-2"></i><p>All systems operational</p></div>';
+                return;
+            }
+
+            container.innerHTML = highRisk.map(p => {
+                const util = (p.spent / p.budget) * 100;
+                const disparity = Math.abs(util - p.progress).toFixed(1);
+                return `
+                    <div class="bg-red-50 border border-red-200 rounded-lg p-4 hover:shadow-md transition cursor-pointer" onclick="openProjectModal(${p.id})">
+                        <div class="flex justify-between items-start mb-2">
+                            <p class="font-semibold text-gray-800 text-sm">${p.name}</p>
+                            <span class="text-xs bg-red-600 text-white px-2 py-1 rounded-full">${p.risk}</span>
+                        </div>
+                        <p class="text-xs text-red-600 font-medium">⚠️ Spend/Progress Gap: ${disparity}%</p>
+                        <p class="text-xs text-gray-500 mt-1">${p.district} • Last updated: ${new Date(p.lastUpdate).toLocaleDateString()}</p>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderDistrictChart() {
+            const ctx = document.getElementById('district-chart');
+            if (!ctx) return;
+
+            const districtData = {};
+            DATA.projects.forEach(p => {
+                if (!districtData[p.district]) districtData[p.district] = 0;
+                districtData[p.district] += p.budget;
+            });
+
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: Object.keys(districtData),
+                    datasets: [{
+                        label: 'Budget Allocation',
+                        data: Object.values(districtData),
+                        backgroundColor: 'rgba(99, 102, 241, 0.8)',
+                        borderColor: '#6366f1',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: { y: { beginAtZero: true } }
+                }
+            });
+        }
+
+        function renderExpenditureChart() {
+            const ctx = document.getElementById('expenditure-chart');
+            if (!ctx) return;
+
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: ['Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan'],
+                    datasets: [{
+                        label: 'Actual Expenditure',
+                        data: [8, 15, 22, 30, 38, 45, 52, 58, 63, 68],
+                        borderColor: '#6366f1',
+                        backgroundColor: 'rgba(99, 102, 241, 0.1)',
+                        tension: 0.4,
+                        fill: true
+                    }, {
+                        label: 'Target Expenditure',
+                        data: [10, 20, 30, 40, 50, 60, 70, 80, 90, 100],
+                        borderColor: '#94a3b8',
+                        borderDash: [5, 5],
+                        tension: 0.4,
+                        fill: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { position: 'bottom' } },
+                    scales: { y: { beginAtZero: true } }
+                }
+            });
+        }
+
+        // ==================== PROJECTS VIEW ====================
+        function renderProjects() {
+            const content = document.getElementById('content-area');
+            content.innerHTML = `
+                <div class="animate-fade-in space-y-4">
+                    <div class="glass rounded-xl p-4 flex flex-col md:flex-row gap-4 items-center">
+                        <div class="relative flex-1 w-full">
+                            <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"></i>
+                            <input type="text" id="project-search" placeholder="Search by name, district, or ID..." 
+                                class="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                                oninput="filterProjects()">
+                        </div>
+                        <select id="status-filter" class="px-4 py-3 border border-gray-300 rounded-lg bg-white" onchange="filterProjects()">
+                            <option value="">All Status</option>
+                            <option value="On Track">On Track</option>
+                            <option value="Delayed">Delayed</option>
+                            <option value="Critical">Critical</option>
+                        </select>
+                        <select id="risk-filter" class="px-4 py-3 border border-gray-300 rounded-lg bg-white" onchange="filterProjects()">
+                            <option value="">All Risk Levels</option>
+                            <option value="Low">Low Risk</option>
+                            <option value="Medium">Medium Risk</option>
+                            <option value="High">High Risk</option>
+                        </select>
+                        <select id="category-filter" class="px-4 py-3 border border-gray-300 rounded-lg bg-white" onchange="filterProjects()">
+                            <option value="">All Categories</option>
+                            <option value="Infrastructure">Infrastructure</option>
+                            <option value="Equipment">Equipment</option>
+                            <option value="Renovation">Renovation</option>
+                            <option value="Expansion">Expansion</option>
+                        </select>
+                    </div>
+
+                    <div class="glass rounded-xl overflow-hidden">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm">
+                                <thead class="bg-gray-100 border-b border-gray-200">
+                                    <tr>
+                                        <th class="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase">Project</th>
+                                        <th class="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase">Budget / Spent</th>
+                                        <th class="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase">Progress</th>
+                                        <th class="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase">Risk Score</th>
+                                        <th class="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase">Status</th>
+                                        <th class="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="projects-table-body" class="divide-y divide-gray-100">
+                                    <!-- Populated by JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            filterProjects();
+        }
+
+        function filterProjects() {
+            const search = document.getElementById('project-search')?.value.toLowerCase() || '';
+            const statusFilter = document.getElementById('status-filter')?.value || '';
+            const riskFilter = document.getElementById('risk-filter')?.value || '';
+            const categoryFilter = document.getElementById('category-filter')?.value || '';
+
+            const filtered = DATA.projects.filter(p => {
+                const matchSearch = p.name.toLowerCase().includes(search) || 
+                                  p.district.toLowerCase().includes(search) || 
+                                  p.id.toString().includes(search);
+                const matchStatus = !statusFilter || p.status === statusFilter;
+                const risk = calculateRiskScore(p);
+                const riskLevel = getRiskLevel(risk).level;
+                const matchRisk = !riskFilter || riskLevel === riskFilter;
+                const matchCategory = !categoryFilter || p.category === categoryFilter;
+                return matchSearch && matchStatus && matchRisk && matchCategory;
+            });
+
+            const tbody = document.getElementById('projects-table-body');
+            if (!tbody) return;
+
+            tbody.innerHTML = filtered.map(p => {
+                const util = (p.spent / p.budget) * 100;
+                const risk = calculateRiskScore(p);
+                const riskInfo = getRiskLevel(risk);
+                
+                return `
+                    <tr class="hover:bg-gray-50 transition">
+                        <td class="px-6 py-4">
+                            <p class="font-semibold text-gray-800">${p.name}</p>
+                            <p class="text-xs text-gray-500">${p.district} • ${p.category}</p>
+                        </td>
+                        <td class="px-6 py-4">
+                            <p class="font-semibold text-gray-800">${formatCurrency(p.budget)}</p>
+                            <p class="text-xs text-gray-500">Spent: ${formatCurrency(p.spent)} (${util.toFixed(1)}%)</p>
+                        </td>
+                        <td class="px-6 py-4">
+                            <div class="flex items-center gap-2">
+                                <span class="font-semibold">${p.progress}%</span>
+                                <div class="w-24 bg-gray-200 rounded-full h-2">
+                                    <div class="bg-indigo-500 h-2 rounded-full" style="width: ${p.progress}%"></div>
+                                </div>
+                            </div>
+                        </td>
+                        <td class="px-6 py-4">
+                            <div class="flex items-center gap-2">
+                                <span class="font-bold text-2xl ${riskInfo.color === 'red' ? 'text-red-600' : riskInfo.color === 'yellow' ? 'text-yellow-600' : 'text-green-600'}">${risk}</span>
+                                <span class="text-xs px-2 py-1 rounded-full ${riskInfo.class} text-white">${riskInfo.level}</span>
+                            </div>
+                        </td>
+                        <td class="px-6 py-4">
+                            <span class="px-3 py-1 rounded-full text-xs font-semibold ${
+                                p.status === 'On Track' ? 'bg-green-100 text-green-700' :
+                                p.status === 'Delayed' ? 'bg-yellow-100 text-yellow-700' :
+                                'bg-red-100 text-red-700'
+                            }">${p.status}</span>
+                        </td>
+                        <td class="px-6 py-4">
+                            <button onclick="openProjectModal(${p.id})" class="text-indigo-600 hover:text-indigo-800 font-semibold text-sm">
+                                View Details →
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        // ==================== ANOMALIES VIEW ====================
+        function renderAnomalies() {
+            const anomalies = DATA.projects
+                .map(p => ({ ...p, risk: calculateRiskScore(p) }))
+                .filter(p => p.risk >= 40)
+                .sort((a, b) => b.risk - a.risk);
+
+            const content = document.getElementById('content-area');
+            content.innerHTML = `
+                <div class="animate-fade-in space-y-6">
+                    <div class="glass rounded-xl p-6">
+                        <h3 class="text-xl font-bold text-gray-800 mb-2">Anomaly Detection Summary</h3>
+                        <p class="text-gray-600">Projects flagged by AI for financial disparity, delays, or verification mismatches</p>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div class="glass rounded-xl p-6 border-l-4 border-red-500">
+                            <p class="text-xs text-gray-500 font-semibold uppercase">High Risk</p>
+                            <h3 class="text-4xl font-bold text-red-600 mt-2">${anomalies.filter(a => a.risk >= 70).length}</h3>
+                        </div>
+                        <div class="glass rounded-xl p-6 border-l-4 border-yellow-500">
+                            <p class="text-xs text-gray-500 font-semibold uppercase">Medium Risk</p>
+                            <h3 class="text-4xl font-bold text-yellow-600 mt-2">${anomalies.filter(a => a.risk >= 40 && a.risk < 70).length}</h3>
+                        </div>
+                        <div class="glass rounded-xl p-6 border-l-4 border-blue-500">
+                            <p class="text-xs text-gray-500 font-semibold uppercase">Total Flagged</p>
+                            <h3 class="text-4xl font-bold text-blue-600 mt-2">${anomalies.length}</h3>
+                        </div>
+                    </div>
+
+                    <div class="glass rounded-xl overflow-hidden">
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm">
+                                <thead class="bg-gray-100 border-b border-gray-200">
+                                    <tr>
+                                        <th class="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase">Project</th>
+                                        <th class="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase">Risk Score</th>
+                                        <th class="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase">Anomaly Reason</th>
+                                        <th class="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase">Target vs. Predicted</th>
+                                        <th class="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-100">
+                                    ${anomalies.map(p => {
+                                        const util = (p.spent / p.budget) * 100;
+                                        const disparity = Math.abs(util - p.progress).toFixed(1);
+                                        const riskInfo = getRiskLevel(p.risk);
+                                        const targetDate = new Date(p.targetDate);
+                                        const predictedDate = predictCompletionDate(p);
+                                        const daysToTarget = Math.floor((targetDate - new Date()) / (1000 * 60 * 60 * 24));
+                                        
+                                        return `
+                                            <tr class="hover:bg-gray-50">
+                                                <td class="px-6 py-4">
+                                                    <p class="font-semibold text-gray-800">${p.name}</p>
+                                                    <p class="text-xs text-gray-500">${p.district}</p>
+                                                </td>
+                                                <td class="px-6 py-4">
+                                                    <div class="flex items-center gap-2">
+                                                        <span class="text-2xl font-bold ${riskInfo.color === 'red' ? 'text-red-600' : 'text-yellow-600'}">${p.risk}</span>
+                                                        <span class="text-xs px-2 py-1 rounded-full ${riskInfo.class} text-white">${riskInfo.level}</span>
+                                                    </div>
+                                                </td>
+                                                <td class="px-6 py-4">
+                                                    <div class="space-y-1">
+                                                        ${disparity > 20 ? `<p class="text-xs text-red-600">⚠️ Spending/Progress Gap: ${disparity}%</p>` : ''}
+                                                        ${daysToTarget < 30 && p.progress < 80 ? `<p class="text-xs text-orange-600">⏰ Deadline pressure: ${daysToTarget} days</p>` : ''}
+                                                        ${new Date() - new Date(p.lastUpdate) > 15 * 24 * 60 * 60 * 1000 ? `<p class="text-xs text-yellow-600">📅 No updates for 15+ days</p>` : ''}
+                                                    </div>
+                                                </td>
+                                                <td class="px-6 py-4">
+                                                    <p class="text-sm">Target: ${targetDate.toLocaleDateString()}</p>
+                                                    <p class="text-xs ${p.risk >= 70 ? 'text-red-600' : 'text-yellow-600'} font-semibold">
+                                                        AI Predicted: ${predictedDate.toLocaleDateString()}
+                                                        ${predictedDate > targetDate ? ' (Delayed)' : ''}
+                                                    </p>
+                                                </td>
+                                                <td class="px-6 py-4">
+                                                    <button onclick="openProjectModal(${p.id})" class="text-indigo-600 hover:text-indigo-800 font-semibold">
+                                                        Investigate →
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        `;
+                                    }).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // ==================== AUDITOR VIEW ====================
+        function renderAuditor() {
+            const content = document.getElementById('content-area');
+            content.innerHTML = `
+                <div class="animate-fade-in max-w-2xl mx-auto space-y-6 pb-20">
+                    <!-- GPS Banner -->
+                    <div class="glass-dark text-white rounded-xl p-6 shadow-lg">
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <p class="text-xs text-gray-300 uppercase">Current Location</p>
+                                <p class="text-lg font-mono font-bold text-green-400 mt-1">
+                                    <i class="fas fa-location-crosshairs"></i> 23.0225° N, 72.5714° E
+                                </p>
+                                <p class="text-xs text-gray-400 mt-1">Accuracy: <span class="text-green-400">High (±5m)</span></p>
+                            </div>
+                            <div class="w-16 h-16 rounded-full border-4 border-green-400 flex items-center justify-center animate-pulse">
+                                <i class="fas fa-satellite-dish text-2xl"></i>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Audit Form -->
+                    <form id="audit-form" onsubmit="submitAudit(event)" class="glass rounded-xl overflow-hidden shadow-lg">
+                        <div class="bg-gradient-to-r from-indigo-600 to-purple-600 p-6 text-white">
+                            <h3 class="text-xl font-bold">New Site Audit</h3>
+                            <p class="text-sm text-indigo-100">Complete all steps to verify progress</p>
+                        </div>
+
+                        <div class="p-6 space-y-6">
+                            <!-- Step 1: Select Project -->
+                            <div class="relative pl-8 border-l-4 border-indigo-500">
+                                <div class="absolute -left-[13px] top-0 w-6 h-6 rounded-full bg-indigo-500 text-white flex items-center justify-center text-xs font-bold">1</div>
+                                <label class="block text-sm font-bold text-gray-700 mb-3">Select Assigned Project</label>
+                                <select id="audit-project" required class="w-full px-4 py-3 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500" onchange="loadProjectDetails()">
+                                    <option value="">Choose project...</option>
+                                    ${DATA.projects.map(p => `<option value="${p.id}">${p.name} (${p.district})</option>`).join('')}
+                                </select>
+                                <div id="project-context" class="hidden mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                                    <!-- Populated by JS -->
+                                </div>
+                            </div>
+
+                            <!-- Step 2: Update Progress -->
+                            <div id="step-2" class="relative pl-8 border-l-4 border-gray-300">
+                                <div class="absolute -left-[13px] top-0 w-6 h-6 rounded-full bg-gray-300 text-white flex items-center justify-center text-xs font-bold">2</div>
+                                <label class="block text-sm font-bold text-gray-700 mb-3">Update Financial Milestone</label>
+                                <div class="grid grid-cols-2 gap-4">
+                                    <div>
+                                        <label class="block text-xs text-gray-600 mb-2">Expenditure Amount</label>
+                                        <input type="number" id="audit-expenditure" disabled required class="w-full px-4 py-3 border border-gray-300 rounded-lg" placeholder="₹ 0">
+                                    </div>
+                                    <div>
+                                        <label class="block text-xs text-gray-600 mb-2">Completed Milestone</label>
+                                        <select id="audit-milestone" disabled required class="w-full px-4 py-3 border border-gray-300 rounded-lg bg-white">
+                                            <option value="">Select...</option>
+                                            <option value="10">Site Preparation (10%)</option>
+                                            <option value="25">Foundation (25%)</option>
+                                            <option value="50">Structure (50%)</option>
+                                            <option value="75">Finishing (75%)</option>
+                                            <option value="100">Complete (100%)</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Step 3: Capture Evidence -->
+                            <div id="step-3" class="relative pl-8 border-l-4 border-gray-300">
+                                <div class="absolute -left-[13px] top-0 w-6 h-6 rounded-full bg-gray-300 text-white flex items-center justify-center text-xs font-bold">3</div>
+                                <label class="block text-sm font-bold text-gray-700 mb-3">Capture Geo-Tagged Evidence</label>
+                                <div class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:bg-gray-50 cursor-pointer transition" onclick="document.getElementById('photo-input').click()">
+                                    <i class="fas fa-camera text-4xl text-gray-400 mb-3"></i>
+                                    <p class="text-sm font-medium text-gray-600">Tap to capture photo</p>
+                                    <p class="text-xs text-gray-400 mt-1">GPS location will be auto-tagged</p>
+                                </div>
+                                <input type="file" id="photo-input" accept="image/*" capture="environment" class="hidden" onchange="handlePhotoCapture(this)">
+                                
+                                <!-- AI Analysis Preview -->
+                                <div id="ai-analysis" class="hidden mt-4 p-4 bg-purple-50 rounded-lg border border-purple-200">
+                                    <div class="flex items-center gap-3 mb-3">
+                                        <div class="spinner border-purple-600"></div>
+                                        <span class="text-sm font-bold text-purple-800" id="ai-status">AI analyzing image...</span>
+                                    </div>
+                                    <div id="ai-result" class="hidden space-y-2 text-sm">
+                                        <div class="flex justify-between">
+                                            <span class="text-gray-600">Detected Stage:</span>
+                                            <span class="font-bold text-purple-800" id="ai-stage">-</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="text-gray-600">Confidence:</span>
+                                            <span class="font-bold text-purple-800" id="ai-confidence">-</span>
+                                        </div>
+                                        <div class="flex justify-between">
+                                            <span class="text-gray-600">Match Status:</span>
+                                            <span class="font-bold" id="ai-match">-</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <button type="submit" id="submit-btn" disabled class="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-4 rounded-lg font-bold text-lg shadow-lg hover:shadow-xl transform hover:scale-[1.02] transition disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none">
+                                Submit Audit Report
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            `;
+        }
+
+        let auditData = {
+            projectId: null,
+            expenditure: 0,
+            milestone: 0,
+            photoFile: null,
+            aiClassified: null,
+            aiConfidence: 0
+        };
+
+        function loadProjectDetails() {
+            const projectId = parseInt(document.getElementById('audit-project').value);
+            if (!projectId) return;
+
+            auditData.projectId = projectId;
+            const project = DATA.projects.find(p => p.id === projectId);
+            
+            const context = document.getElementById('project-context');
+            context.classList.remove('hidden');
+            context.innerHTML = `
+                <div class="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                        <p class="text-xs text-gray-600">Current Progress</p>
+                        <p class="font-bold text-lg text-blue-800">${project.progress}%</p>
+                    </div>
+                    <div>
+                        <p class="text-xs text-gray-600">Budget Utilization</p>
+                        <p class="font-bold text-lg text-blue-800">${((project.spent / project.budget) * 100).toFixed(1)}%</p>
+                    </div>
+                </div>
+            `;
+
+            // Enable step 2
+            document.getElementById('step-2').classList.replace('border-gray-300', 'border-indigo-500');
+            document.getElementById('step-2').querySelector('.bg-gray-300').classList.replace('bg-gray-300', 'bg-indigo-500');
+            document.getElementById('audit-expenditure').disabled = false;
+            document.getElementById('audit-milestone').disabled = false;
+        }
+
+        function handlePhotoCapture(input) {
+            if (!input.files || !input.files[0]) return;
+            
+            auditData.photoFile = input.files[0];
+
+            // Enable step 3 visual
+            document.getElementById('step-3').classList.replace('border-gray-300', 'border-indigo-500');
+            document.getElementById('step-3').querySelector('.bg-gray-300').classList.replace('bg-gray-300', 'bg-indigo-500');
+
+            // Show AI analysis
+            const analysisDiv = document.getElementById('ai-analysis');
+            analysisDiv.classList.remove('hidden');
+            document.getElementById('submit-btn').disabled = true;
+
+            // Simulate AI processing
+            setTimeout(() => {
+                const milestone = parseInt(document.getElementById('audit-milestone').value) || 50;
+                const stages = {
+                    10: 'Site Preparation',
+                    25: 'Foundation',
+                    50: 'Structure/Framing',
+                    75: 'Finishing/Interiors',
+                    100: 'Completed'
+                };
+                
+                const aiDetected = stages[milestone] || stages[50];
+                const confidence = (85 + Math.random() * 10).toFixed(1);
+                const userReported = stages[milestone];
+                const match = aiDetected === userReported;
+
+                auditData.aiClassified = aiDetected;
+                auditData.aiConfidence = parseFloat(confidence);
+
+                document.getElementById('ai-status').textContent = 'AI analysis complete';
+                document.querySelector('.spinner').classList.add('hidden');
+                
+                const resultDiv = document.getElementById('ai-result');
+                resultDiv.classList.remove('hidden');
+                document.getElementById('ai-stage').textContent = aiDetected;
+                document.getElementById('ai-confidence').textContent = confidence + '%';
+                document.getElementById('ai-match').innerHTML = match ? 
+                    '<span class="text-green-600">✓ Verified Match</span>' : 
+                    '<span class="text-red-600">⚠️ MISMATCH DETECTED</span>';
+
+                document.getElementById('submit-btn').disabled = false;
+            }, 2500);
+        }
+
+        function submitAudit(e) {
+            e.preventDefault();
+            
+            const projectId = auditData.projectId;
+            const expenditure = parseFloat(document.getElementById('audit-expenditure').value);
+            const milestone = parseInt(document.getElementById('audit-milestone').value);
+            const userReported = {10: 'Site Preparation', 25: 'Foundation', 50: 'Structure', 75: 'Finishing', 100: 'Completed'}[milestone];
+
+            const project = DATA.projects.find(p => p.id === projectId);
+            if (!project) return;
+
+            // Update project
+            project.spent += expenditure;
+            project.progress = milestone;
+            project.lastUpdate = new Date().toISOString().split('T')[0];
+
+            // Add verification record
+            const verification = {
+                timestamp: new Date().toISOString(),
+                milestone: milestone,
+                auditorReported: userReported,
+                aiClassified: auditData.aiClassified,
+                confidence: auditData.aiConfidence,
+                aiMatch: userReported === auditData.aiClassified,
+                lat: 23.0225,
+                lng: 72.5714
+            };
+            project.verifications.push(verification);
+
+            // Update status
+            const risk = calculateRiskScore(project);
+            if (risk >= 70) project.status = 'Critical';
+            else if (risk >= 40) project.status = 'Delayed';
+            else project.status = 'On Track';
+
+            // Add notification
+            if (!verification.aiMatch) {
+                addNotification(
+                    'AI Mismatch Detected',
+                    `Project ${project.name}: Auditor reported ${userReported} but AI detected ${auditData.aiClassified}`,
+                    'warning'
+                );
+            }
+
+            saveData();
+            showToast('Audit submitted successfully!', 'success');
+            
+            // Reset form
+            document.getElementById('audit-form').reset();
+            auditData = { projectId: null, expenditure: 0, milestone: 0, photoFile: null, aiClassified: null, aiConfidence: 0 };
+            
+            setTimeout(() => {
+                navigate('dashboard');
+            }, 1000);
+        }
+
+        // ==================== ANALYTICS VIEW ====================
+        function renderAnalytics() {
+            const content = document.getElementById('content-area');
+            content.innerHTML = `
+                <div class="animate-fade-in space-y-6">
+                    <!-- AI Header -->
+                    <div class="bg-gradient-to-r from-purple-900 to-indigo-900 text-white rounded-xl p-8 shadow-xl">
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <h2 class="text-3xl font-bold mb-2">AI Analytics Engine</h2>
+                                <p class="text-purple-200">Predictive risk scoring using machine learning algorithms</p>
+                            </div>
+                            <div class="text-right">
+                                <p class="text-sm text-purple-300">Model Accuracy</p>
+                                <p class="text-4xl font-bold">97.8%</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Analytics Grid -->
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <!-- Scatter Plot -->
+                        <div class="lg:col-span-2 glass rounded-xl p-6">
+                            <h3 class="font-bold text-gray-800 mb-2">Financial Spend vs Physical Progress Correlation</h3>
+                            <p class="text-sm text-gray-500 mb-4">Red points indicate anomalies (Spend > Progress + 20%)</p>
+                            <div class="h-96">
+                                <canvas id="correlation-chart"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- AI Verification Log -->
+                        <div class="glass rounded-xl p-6">
+                            <h3 class="font-bold text-gray-800 mb-4">Recent AI Validations</h3>
+                            <div class="space-y-3" id="ai-log">
+                                <!-- Populated by JS -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Risk Distribution -->
+                    <div class="glass rounded-xl p-6">
+                        <h3 class="font-bold text-gray-800 mb-4">Risk Score Distribution</h3>
+                        <div class="h-64">
+                            <canvas id="risk-distribution-chart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            setTimeout(() => {
+                renderCorrelationChart();
+                renderAILog();
+                renderRiskDistribution();
+            }, 100);
+        }
+
+        function renderCorrelationChart() {
+            const ctx = document.getElementById('correlation-chart');
+            if (!ctx) return;
+
+            const dataPoints = DATA.projects.map(p => {
+                const util = (p.spent / p.budget) * 100;
+                const isAnomaly = Math.abs(util - p.progress) > 20;
+                return {
+                    x: p.progress,
+                    y: util,
+                    r: 8,
+                    name: p.name,
+                    isAnomaly: isAnomaly
+                };
+            });
+
+            new Chart(ctx, {
+                type: 'bubble',
+                data: {
+                    datasets: [{
+                        label: 'Projects',
+                        data: dataPoints,
+                        backgroundColor: dataPoints.map(d => d.isAnomaly ? 'rgba(239, 68, 68, 0.7)' : 'rgba(99, 102, 241, 0.7)'),
+                        borderColor: dataPoints.map(d => d.isAnomaly ? '#dc2626' : '#4f46e5'),
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { 
+                            title: { display: true, text: 'Physical Progress (%)' },
+                            min: 0, max: 100 
+                        },
+                        y: { 
+                            title: { display: true, text: 'Fund Utilization (%)' },
+                            min: 0, max: 100 
+                        }
+                    },
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: (ctx) => `${ctx.raw.name}: Progress ${ctx.raw.x}%, Util ${ctx.raw.y.toFixed(1)}%`
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderAILog() {
+            const container = document.getElementById('ai-log');
+            if (!container) return;
+
+            const allVerifications = DATA.projects
+                .flatMap(p => p.verifications.map(v => ({ ...v, projectName: p.name })))
+                .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+                .slice(0, 5);
+
+            if (allVerifications.length === 0) {
+                container.innerHTML = '<p class="text-sm text-gray-400 text-center py-8">No AI validations yet</p>';
+                return;
+            }
+
+            container.innerHTML = allVerifications.map(v => `
+                <div class="p-3 bg-gray-50 rounded-lg border ${v.aiMatch ? 'border-green-200' : 'border-red-200'}">
+                    <p class="text-sm font-semibold text-gray-800">${v.projectName}</p>
+                    <p class="text-xs text-gray-600 mt-1">Verified: ${v.aiClassified} (${v.confidence}%)</p>
+                    <div class="flex justify-between items-center mt-2">
+                        <span class="text-xs text-gray-500">${new Date(v.timestamp).toLocaleString()}</span>
+                        ${v.aiMatch ? 
+                            '<span class="bg-green-100 text-green-700 text-xs px-2 py-1 rounded-full font-semibold">✓ Match</span>' :
+                            '<span class="bg-red-100 text-red-700 text-xs px-2 py-1 rounded-full font-semibold">Mismatch</span>'
+                        }
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function renderRiskDistribution() {
+            const ctx = document.getElementById('risk-distribution-chart');
+            if (!ctx) return;
+
+            const riskScores = DATA.projects.map(p => calculateRiskScore(p));
+            const bins = [0, 0, 0, 0]; // 0-25, 25-50, 50-75, 75-100
+            
+            riskScores.forEach(score => {
+                if (score < 25) bins[0]++;
+                else if (score < 50) bins[1]++;
+                else if (score < 75) bins[2]++;
+                else bins[3]++;
+            });
+
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['0-25 (Low)', '25-50 (Moderate)', '50-75 (High)', '75-100 (Critical)'],
+                    datasets: [{
+                        label: 'Number of Projects',
+                        data: bins,
+                        backgroundColor: ['#10b981', '#f59e0b', '#f97316', '#ef4444'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } }
+                }
+            });
+        }
+
+        // ==================== FORECASTING VIEW ====================
+        function renderForecasting() {
+            const totalBudget = DATA.projects.reduce((sum, p) => sum + p.budget, 0);
+            const totalSpent = DATA.projects.reduce((sum, p) => sum + p.spent, 0);
+            const monthlyBurnRate = totalSpent / 10; // Simulated 10 months
+            const remainingBudget = totalBudget - totalSpent;
+            const monthsRemaining = Math.floor(remainingBudget / monthlyBurnRate);
+
+            const content = document.getElementById('content-area');
+            content.innerHTML = `
+                <div class="animate-fade-in space-y-6">
+                    <div class="glass rounded-xl p-6">
+                        <h3 class="text-xl font-bold text-gray-800 mb-2">Budget Forecasting & Burn Rate Analysis</h3>
+                        <p class="text-gray-600">AI-powered predictions for fund depletion and reallocation opportunities</p>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div class="glass rounded-xl p-6 border-l-4 border-purple-500">
+                            <p class="text-xs text-gray-500 font-semibold uppercase">Monthly Burn Rate</p>
+                            <h3 class="text-3xl font-bold text-purple-600 mt-2">${formatCurrency(monthlyBurnRate)}</h3>
+                        </div>
+                        <div class="glass rounded-xl p-6 border-l-4 border-green-500">
+                            <p class="text-xs text-gray-500 font-semibold uppercase">Remaining Budget</p>
+                            <h3 class="text-3xl font-bold text-green-600 mt-2">${formatCurrency(remainingBudget)}</h3>
+                        </div>
+                        <div class="glass rounded-xl p-6 border-l-4 border-orange-500">
+                            <p class="text-xs text-gray-500 font-semibold uppercase">Months to Depletion</p>
+                            <h3 class="text-3xl font-bold text-orange-600 mt-2">${monthsRemaining}</h3>
+                        </div>
+                    </div>
+
+                    <div class="glass rounded-xl p-6">
+                        <h3 class="font-bold text-gray-800 mb-4">Projected Fund Utilization (6 Months)</h3>
+                        <div class="h-64">
+                            <canvas id="forecast-chart"></canvas>
+                        </div>
+                    </div>
+
+                    <div class="glass rounded-xl p-6">
+                        <h3 class="font-bold text-gray-800 mb-4">AI Reallocation Suggestions</h3>
+                        <div class="space-y-4">
+                            ${DATA.projects.filter(p => {
+                                const util = (p.spent / p.budget) * 100;
+                                return util < 30 && p.progress < 20;
+                            }).map(p => `
+                                <div class="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                                    <div class="flex justify-between items-start">
+                                        <div>
+                                            <p class="font-semibold text-gray-800">${p.name}</p>
+                                            <p class="text-sm text-gray-600 mt-1">Unutilized: ${formatCurrency(p.budget - p.spent)}</p>
+                                        </div>
+                                        <span class="bg-blue-600 text-white text-xs px-3 py-1 rounded-full font-semibold">Low Activity</span>
+                                    </div>
+                                    <p class="text-xs text-blue-700 mt-2">💡 Suggestion: Consider reallocating funds to high-priority projects in same district</p>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            setTimeout(() => {
+                const ctx = document.getElementById('forecast-chart');
+                if (ctx) {
+                    const months = ['Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul'];
+                    const currentSpend = totalSpent;
+                    const projectedData = months.map((_, i) => currentSpend + monthlyBurnRate * (i + 1));
+
+                    new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: months,
+                            datasets: [{
+                                label: 'Projected Spending',
+                                data: projectedData,
+                                borderColor: '#8b5cf6',
+                                backgroundColor: 'rgba(139, 92, 246, 0.1)',
+                                tension: 0.4,
+                                fill: true
+                            }, {
+                                label: 'Total Budget',
+                                data: months.map(() => totalBudget),
+                                borderColor: '#ef4444',
+                                borderDash: [5, 5],
+                                tension: 0,
+                                fill: false
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { position: 'bottom' } },
+                            scales: { y: { beginAtZero: true } }
+                        }
+                    });
+                }
+            }, 100);
+        }
+
+        // ==================== REPORTS VIEW ====================
+        function renderReports() {
+            const content = document.getElementById('content-area');
+            content.innerHTML = `
+                <div class="animate-fade-in space-y-6">
+                    <div class="glass rounded-xl p-6">
+                        <h3 class="text-xl font-bold text-gray-800 mb-2">Reports & Export</h3>
+                        <p class="text-gray-600">Generate comprehensive reports for stakeholders and regulatory bodies</p>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div class="glass rounded-xl p-6">
+                            <div class="flex items-center gap-4 mb-4">
+                                <div class="w-16 h-16 bg-red-100 rounded-xl flex items-center justify-center">
+                                    <i class="fas fa-file-pdf text-3xl text-red-600"></i>
+                                </div>
+                                <div>
+                                    <h4 class="font-bold text-gray-800">Executive Summary Report</h4>
+                                    <p class="text-sm text-gray-600">High-level overview for policymakers</p>
+                                </div>
+                            </div>
+                            <button onclick="generatePDFReport('executive')" class="w-full bg-red-600 text-white py-3 rounded-lg font-semibold hover:bg-red-700 transition">
+                                <i class="fas fa-download mr-2"></i> Download PDF
+                            </button>
+                        </div>
+
+                        <div class="glass rounded-xl p-6">
+                            <div class="flex items-center gap-4 mb-4">
+                                <div class="w-16 h-16 bg-green-100 rounded-xl flex items-center justify-center">
+                                    <i class="fas fa-file-excel text-3xl text-green-600"></i>
+                                </div>
+                                <div>
+                                    <h4 class="font-bold text-gray-800">Detailed Project Data</h4>
+                                    <p class="text-sm text-gray-600">Complete project registry in Excel</p>
+                                </div>
+                            </div>
+                            <button onclick="generateExcelReport()" class="w-full bg-green-600 text-white py-3 rounded-lg font-semibold hover:bg-green-700 transition">
+                                <i class="fas fa-download mr-2"></i> Download Excel
+                            </button>
+                        </div>
+
+                        <div class="glass rounded-xl p-6">
+                            <div class="flex items-center gap-4 mb-4">
+                                <div class="w-16 h-16 bg-orange-100 rounded-xl flex items-center justify-center">
+                                    <i class="fas fa-exclamation-triangle text-3xl text-orange-600"></i>
+                                </div>
+                                <div>
+                                    <h4 class="font-bold text-gray-800">Anomaly Report</h4>
+                                    <p class="text-sm text-gray-600">High-risk projects requiring action</p>
+                                </div>
+                            </div>
+                            <button onclick="generatePDFReport('anomaly')" class="w-full bg-orange-600 text-white py-3 rounded-lg font-semibold hover:bg-orange-700 transition">
+                                <i class="fas fa-download mr-2"></i> Download PDF
+                            </button>
+                        </div>
+
+                        <div class="glass rounded-xl p-6">
+                            <div class="flex items-center gap-4 mb-4">
+                                <div class="w-16 h-16 bg-purple-100 rounded-xl flex items-center justify-center">
+                                    <i class="fas fa-chart-line text-3xl text-purple-600"></i>
+                                </div>
+                                <div>
+                                    <h4 class="font-bold text-gray-800">Quarterly Performance</h4>
+                                    <p class="text-sm text-gray-600">Quarter-wise analysis and trends</p>
+                                </div>
+                            </div>
+                            <button onclick="generatePDFReport('quarterly')" class="w-full bg-purple-600 text-white py-3 rounded-lg font-semibold hover:bg-purple-700 transition">
+                                <i class="fas fa-download mr-2"></i> Download PDF
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function generatePDFReport(type) {
+            showToast('Generating PDF report...', 'info');
+            // Simulated PDF generation
+            setTimeout(() => {
+                showToast(`${type.charAt(0).toUpperCase() + type.slice(1)} report downloaded successfully!`, 'success');
+            }, 1500);
+        }
+
+        function generateExcelReport() {
+            showToast('Generating Excel report...', 'info');
+            
+            // Create CSV content
+            let csv = 'ID,Name,District,Category,Budget,Spent,Progress,Status,Target Date,Risk Score\n';
+            DATA.projects.forEach(p => {
+                const risk = calculateRiskScore(p);
+                csv += `${p.id},${p.name},${p.district},${p.category},${p.budget},${p.spent},${p.progress},${p.status},${p.targetDate},${risk}\n`;
+            });
+
+            // Download CSV
+            const blob = new Blob([csv], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'nhm-projects-report.csv';
+            a.click();
+
+            showToast('Excel report downloaded successfully!', 'success');
+        }
+
+        // ==================== NOTIFICATIONS VIEW ====================
+        function renderNotifications() {
+            const content = document.getElementById('content-area');
+            content.innerHTML = `
+                <div class="animate-fade-in space-y-4">
+                    <div class="glass rounded-xl p-6 flex justify-between items-center">
+                        <div>
+                            <h3 class="text-xl font-bold text-gray-800">Notifications</h3>
+                            <p class="text-sm text-gray-600">${DATA.notifications.filter(n => !n.read).length} unread messages</p>
+                        </div>
+                        <button onclick="markAllAsRead()" class="text-indigo-600 hover:text-indigo-800 font-semibold text-sm">
+                            Mark all as read
+                        </button>
+                    </div>
+
+                    <div class="space-y-3">
+                        ${DATA.notifications.length > 0 ? DATA.notifications.map(n => `
+                            <div class="glass rounded-xl p-4 ${!n.read ? 'border-l-4 border-indigo-500' : ''}">
+                                <div class="flex justify-between items-start">
+                                    <div class="flex-1">
+                                        <div class="flex items-center gap-2 mb-1">
+                                            <i class="fas fa-${n.type === 'warning' ? 'exclamation-triangle text-yellow-500' : n.type === 'error' ? 'times-circle text-red-500' : 'info-circle text-blue-500'}"></i>
+                                            <h4 class="font-semibold text-gray-800">${n.title}</h4>
+                                            ${!n.read ? '<span class="bg-indigo-500 text-white text-xs px-2 py-0.5 rounded-full">NEW</span>' : ''}
+                                        </div>
+                                        <p class="text-sm text-gray-600">${n.message}</p>
+                                        <p class="text-xs text-gray-400 mt-2">${new Date(n.timestamp).toLocaleString()}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        `).join('') : `
+                            <div class="glass rounded-xl p-12 text-center">
+                                <i class="fas fa-bell-slash text-5xl text-gray-300 mb-4"></i>
+                                <p class="text-gray-500">No notifications yet</p>
+                            </div>
+                        `}
+                    </div>
+                </div>
+            `;
+        }
+
+        function markAllAsRead() {
+            DATA.notifications.forEach(n => n.read = true);
+            saveData();
+            updateNotificationCount();
+            renderNotifications();
+            showToast('All notifications marked as read', 'success');
+        }
+
+        // ==================== ADD PROJECT VIEW ====================
+        function renderAddProject() {
+            const content = document.getElementById('content-area');
+            const gujaratDistricts = ['Ahmedabad', 'Surat', 'Vadodara', 'Rajkot', 'Gandhinagar', 'Junagadh', 'Bhavnagar', 'Anand', 'Mehsana', 'Patan', 'Kutch', 'Banaskantha'];
+            
+            content.innerHTML = `
+                <div class="animate-fade-in max-w-4xl mx-auto space-y-6">
+                    <div class="glass rounded-xl p-6">
+                        <h3 class="text-2xl font-bold text-gray-800 mb-2">Add New Health Infrastructure Project</h3>
+                        <p class="text-gray-600">Enter project details to create a new NHM-funded infrastructure project</p>
+                    </div>
+
+                    <form id="new-project-form" onsubmit="handleNewProject(event)" class="glass rounded-xl p-6 space-y-6">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Project Name *</label>
+                                <input type="text" id="project-name" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" placeholder="e.g., PHC Dholka Expansion">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">District *</label>
+                                <select id="project-district" required class="w-full px-4 py-3 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500">
+                                    <option value="">Select District...</option>
+                                    ${gujaratDistricts.map(d => `<option value="${d}">${d}</option>`).join('')}
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Category *</label>
+                                <select id="project-category" required class="w-full px-4 py-3 border border-gray-300 rounded-lg bg-white focus:ring-2 focus:ring-indigo-500">
+                                    <option value="">Select Category...</option>
+                                    <option value="Infrastructure">Infrastructure</option>
+                                    <option value="Equipment">Equipment</option>
+                                    <option value="Renovation">Renovation</option>
+                                    <option value="Expansion">Expansion</option>
+                                    <option value="New Construction">New Construction</option>
+                                    <option value="Specialized Facility">Specialized Facility</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Total Budget (₹) *</label>
+                                <input type="number" id="project-budget" required min="100000" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" placeholder="e.g., 25000000">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Contractor Name *</label>
+                                <input type="text" id="project-contractor" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" placeholder="e.g., Gujarat Construction Ltd.">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Start Date *</label>
+                                <input type="date" id="project-start-date" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Target Completion Date *</label>
+                                <input type="date" id="project-target-date" required class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Initial Progress (%)</label>
+                                <input type="number" id="project-progress" min="0" max="100" value="0" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Latitude</label>
+                                <input type="number" id="project-lat" step="0.0001" min="20" max="25" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" placeholder="e.g., 22.7177">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Longitude</label>
+                                <input type="number" id="project-lng" step="0.0001" min="68" max="75" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500" placeholder="e.g., 72.4587">
+                            </div>
+                        </div>
+
+                        <div class="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                            <p class="text-sm text-blue-800"><i class="fas fa-info-circle mr-2"></i>All fields marked with * are required. GPS coordinates are optional but recommended for map tracking.</p>
+                        </div>
+
+                        <div class="flex gap-4">
+                            <button type="submit" class="flex-1 bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-3 rounded-lg font-bold hover:shadow-lg transform hover:scale-[1.02] transition">
+                                <i class="fas fa-plus-circle mr-2"></i> Create Project
+                            </button>
+                            <button type="button" onclick="navigate('projects')" class="px-8 bg-gray-200 text-gray-700 py-3 rounded-lg font-bold hover:bg-gray-300 transition">
+                                Cancel
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            `;
+        }
+
+        function handleNewProject(e) {
+            e.preventDefault();
+
+            const newProject = {
+                id: Math.max(...DATA.projects.map(p => p.id)) + 1,
+                name: document.getElementById('project-name').value,
+                district: document.getElementById('project-district').value,
+                category: document.getElementById('project-category').value,
+                budget: parseInt(document.getElementById('project-budget').value),
+                contractor: document.getElementById('project-contractor').value,
+                startDate: document.getElementById('project-start-date').value,
+                targetDate: document.getElementById('project-target-date').value,
+                progress: parseInt(document.getElementById('project-progress').value) || 0,
+                lat: parseFloat(document.getElementById('project-lat').value) || 22.2587,
+                lng: parseFloat(document.getElementById('project-lng').value) || 71.1924,
+                spent: 0,
+                status: 'On Track',
+                verifications: [],
+                expenditures: [],
+                lastUpdate: new Date().toISOString().split('T')[0]
+            };
+
+            DATA.projects.push(newProject);
+            saveData();
+
+            addNotification(
+                'New Project Added',
+                `${newProject.name} has been successfully added to the system`,
+                'info'
+            );
+
+            showToast('Project created successfully!', 'success');
+            setTimeout(() => navigate('projects'), 1000);
+        }
+
+        // ==================== SETTINGS VIEW ====================
+        function renderSettings() {
+            const content = document.getElementById('content-area');
+            content.innerHTML = `
+                <div class="animate-fade-in space-y-6">
+                    <div class="glass rounded-xl p-6">
+                        <h3 class="text-xl font-bold text-gray-800 mb-2">Settings & Preferences</h3>
+                        <p class="text-gray-600">Customize your NHM Fund Monitor experience</p>
+                    </div>
+
+                    <div class="glass rounded-xl p-6">
+                        <h4 class="font-bold text-gray-800 mb-4">Anomaly Detection Thresholds</h4>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Financial Disparity Threshold (%)</label>
+                                <input type="number" value="20" class="w-full px-4 py-3 border border-gray-300 rounded-lg" min="5" max="50">
+                                <p class="text-xs text-gray-500 mt-1">Projects with Spend vs Progress difference exceeding this value will be flagged</p>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-2">Days Without Update Alert</label>
+                                <input type="number" value="15" class="w-full px-4 py-3 border border-gray-300 rounded-lg" min="5" max="60">
+                                <p class="text-xs text-gray-500 mt-1">Alert if no updates received for this many days</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="glass rounded-xl p-6">
+                        <h4 class="font-bold text-gray-800 mb-4">Notification Preferences</h4>
+                        <div class="space-y-3">
+                            <div class="flex justify-between items-center">
+                                <div>
+                                    <p class="font-medium text-gray-800">High Risk Project Alerts</p>
+                                    <p class="text-xs text-gray-500">Notify when project risk score exceeds 70</p>
+                                </div>
+                                <div class="toggle-switch active" onclick="toggleSwitch(this)"></div>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <div>
+                                    <p class="font-medium text-gray-800">AI Mismatch Alerts</p>
+                                    <p class="text-xs text-gray-500">Notify when auditor and AI classifications don't match</p>
+                                </div>
+                                <div class="toggle-switch active" onclick="toggleSwitch(this)"></div>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <div>
+                                    <p class="font-medium text-gray-800">Daily Summary Email</p>
+                                    <p class="text-xs text-gray-500">Receive daily digest of all activities</p>
+                                </div>
+                                <div class="toggle-switch" onclick="toggleSwitch(this)"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="glass rounded-xl p-6">
+                        <h4 class="font-bold text-gray-800 mb-4">Data Management</h4>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <button onclick="exportAllData()" class="bg-indigo-600 text-white py-3 px-4 rounded-lg font-semibold hover:bg-indigo-700 transition">
+                                <i class="fas fa-download mr-2"></i> Export All Data
+                            </button>
+                            <button onclick="clearCache()" class="bg-gray-600 text-white py-3 px-4 rounded-lg font-semibold hover:bg-gray-700 transition">
+                                <i class="fas fa-trash mr-2"></i> Clear Cache
+                            </button>
+                        </div>
+                    </div>
+
+                    <button onclick="saveSettings()" class="w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-4 rounded-lg font-bold text-lg shadow-lg hover:shadow-xl transform hover:scale-[1.02] transition">
+                        Save Settings
+                    </button>
+                </div>
+            `;
+        }
+
+        function toggleSwitch(element) {
+            element.classList.toggle('active');
+        }
+
+        function saveSettings() {
+            showToast('Settings saved successfully!', 'success');
+        }
+
+        function exportAllData() {
+            const data = {
+                projects: DATA.projects,
+                users: DATA.users.map(u => ({ ...u, password: undefined })),
+                notifications: DATA.notifications,
+                exportDate: new Date().toISOString()
+            };
+
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'nhm-data-export.json';
+            a.click();
+
+            showToast('Data exported successfully!', 'success');
+        }
+
+        function clearCache() {
+            if (confirm('Are you sure you want to clear all cached data? This will reset the dashboard.')) {
+                localStorage.clear();
+                showToast('Cache cleared successfully!', 'success');
+                setTimeout(() => location.reload(), 1000);
+            }
+        }
+
+        // ==================== INIT ====================
+        document.addEventListener('DOMContentLoaded', () => {
+            if (DATA.currentUser) {
+                initializeApp();
+            }
+
+            // Simulate real-time data updates
+            setInterval(() => {
+                if (DATA.currentUser && Math.random() > 0.7) {
+                    const randomProject = DATA.projects[Math.floor(Math.random() * DATA.projects.length)];
+                    if (randomProject.spent < randomProject.budget) {
+                        const increment = Math.floor(Math.random() * 100000);
+                        randomProject.spent += increment;
+                        
+                        // Check if this creates an anomaly
+                        const risk = calculateRiskScore(randomProject);
+                        if (risk >= 70 && Math.random() > 0.5) {
+                            addNotification(
+                                'High Risk Alert',
+                                `Project ${randomProject.name} has reached a risk score of ${risk}`,
+                                'warning'
+                            );
+                        }
+                        
+                        saveData();
+                        if (currentView === 'dashboard') {
+                            renderPriorityAlerts();
+                        }
+                    }
+                }
+            }, 5000);
+        });
+    </script>
+</body>
+</html>
